@@ -30,6 +30,14 @@ class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=64)
 
 
+class UserUpdate(SQLModel):
+    """Fields a user can change in their own profile. is_admin can never be changed here."""
+
+    email: EmailStr | None = Field(default=None, max_length=255)
+    full_name: str | None = Field(default=None, min_length=1, max_length=100)
+    password: str | None = Field(default=None, min_length=8, max_length=72)
+
+
 class UserPublic(UserBase):
     id: int
     is_admin: bool
