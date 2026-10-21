@@ -21,3 +21,6 @@ venv/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Personal notes (not part of the project)
+notes/
