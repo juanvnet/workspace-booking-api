@@ -17,7 +17,7 @@ from sqlmodel import Field, SQLModel
 
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
-    full_name: str = Field(min_length=3, max_length=100)
+    full_name: str = Field(min_length=1, max_length=100)
 
 
 class User(UserBase, table=True):
