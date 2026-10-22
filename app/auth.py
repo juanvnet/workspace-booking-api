@@ -33,22 +33,19 @@ def create_access_token(user_id: int) -> str:
 
 
 def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> User:
-    """Return the user that owns the token, or answer 401"""
-    credentials_error = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
+    """Return the user that owns the token, or answer 401."""
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id = int(payload["sub"])
+        user = session.get(User, int(payload["sub"]))
     except (jwt.InvalidTokenError, KeyError, ValueError):
-        raise credentials_error from None
+        user = None
 
-    user = session.get(User, user_id)
     if user is None:
-        raise credentials_error
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
