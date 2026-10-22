@@ -32,14 +32,26 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> User:
-    """Return the user that owns the token, or answer 401."""
+def decode_access_token(token: str) -> int | None:
+    """Return the user id stored in the token, or None if the token is not valid"""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user = session.get(User, int(payload["sub"]))
-    except (jwt.InvalidTokenError, KeyError, ValueError):
-        user = None
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            options={"require": ["exp", "sub"]},
+        )
+    except jwt.InvalidTokenError:
+        return None
 
+    subject = payload["sub"]
+    return int(subject) if subject.isdecimal() else None
+
+
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> User:
+    """Return the user that owns the token, or answer 401"""
+    user_id = decode_access_token(token)
+    user = session.get(User, user_id) if user_id is not None else None
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
