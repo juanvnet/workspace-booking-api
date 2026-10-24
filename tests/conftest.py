@@ -15,7 +15,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.auth import create_access_token, hash_password
 from app.database import get_session
 from app.main import app
-from app.models import User
+from app.models import Room, User
 
 TEST_PASSWORD = "test-password"
 
@@ -59,3 +59,28 @@ def user_headers(user) -> dict:
     """Authorization header with a valid token for `user`"""
     token = create_access_token(user.id)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers(session) -> dict:
+    """Authorization header for an admin user"""
+    admin = User(
+        email="admin@example.com",
+        full_name="Admin",
+        hashed_password=hash_password(TEST_PASSWORD),
+        is_admin=True,
+    )
+    session.add(admin)
+    session.commit()
+    session.refresh(admin)
+    token = create_access_token(admin.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def room(session) -> Room:
+    room = Room(name="Hammerhead", location="Biel center", capacity=8)
+    session.add(room)
+    session.commit()
+    session.refresh(room)
+    return room
