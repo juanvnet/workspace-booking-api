@@ -71,9 +71,6 @@ def get_current_admin(user: CurrentUser) -> User:
     return user
 
 
-AdminUser = Annotated[User, Depends(get_current_admin)]
-
-
 def create_first_admin() -> None:
     """Create the admin account from ADMIN_EMAIL / ADMIN_PASSWORD if it does not exist yet"""
     if not settings.admin_email or not settings.admin_password:
