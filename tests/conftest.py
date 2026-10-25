@@ -7,6 +7,8 @@ import os
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SECRET_KEY"] = "test-secret-key-only-used-in-the-tests"
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -84,3 +86,25 @@ def room(session) -> Room:
     session.commit()
     session.refresh(room)
     return room
+
+
+@pytest.fixture
+def other_user_headers(session) -> dict:
+    """Authorization header for a second regular user"""
+    other_user = User(
+        email="valentina@example.com",
+        full_name="Valentina Narma",
+        hashed_password=hash_password(TEST_PASSWORD),
+    )
+    session.add(other_user)
+    session.commit()
+    session.refresh(other_user)
+    token = create_access_token(other_user.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def tomorrow_9am() -> datetime:
+    """Tomorrow at 09:00 UTC: always a valid time in the future for a booking"""
+    tomorrow = datetime.now(UTC) + timedelta(days=1)
+    return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)

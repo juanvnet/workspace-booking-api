@@ -11,7 +11,7 @@ from sqlmodel import select
 from app.auth import create_first_admin
 from app.config import settings
 from app.database import SessionDep, create_db_and_tables
-from app.routers import rooms, users
+from app.routers import bookings, rooms, users
 
 logging.basicConfig(level=logging.INFO)
 
@@ -48,6 +48,7 @@ async def add_process_time_header(request: Request, call_next):
     return response
 
 
+app.include_router(bookings.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(rooms.router, prefix="/api/v1")
 
