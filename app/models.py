@@ -6,11 +6,13 @@ For each resource there is a Base class with the shared fields, the table
 Datetimes are stored and returned in UTC (SQLModel converts them automatically)
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Self
 
 from pydantic import EmailStr, field_validator, model_validator
 from sqlmodel import Field, SQLModel
+
+from app.config import settings
 
 # ---------- Users ----------
 
@@ -105,9 +107,15 @@ class BookingCreate(BookingBase):
         return value.astimezone(UTC)
 
     @model_validator(mode="after")
-    def check_end_after_start(self) -> Self:
+    def check_duration(self) -> Self:
+        """The booking must end after it starts and last between the minimum and maximum"""
         if self.end_at <= self.start_at:
             raise ValueError("end_at must be later than start_at")
+        duration = self.end_at - self.start_at
+        if duration < timedelta(minutes=settings.min_booking_minutes):
+            raise ValueError(f"Bookings must last at least {settings.min_booking_minutes} minutes")
+        if duration > timedelta(hours=settings.max_booking_hours):
+            raise ValueError(f"Bookings cannot be longer than {settings.max_booking_hours} hours")
         return self
 
 

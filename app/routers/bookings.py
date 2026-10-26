@@ -1,14 +1,13 @@
 """Bookings: reserve a room for a time range, list, read and cancel bookings"""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from app.auth import CurrentUser
-from app.config import settings
 from app.database import SessionDep
 from app.models import Booking, BookingCreate, BookingPublic, Room, User
 
@@ -45,12 +44,6 @@ def create_booking(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Bookings must start in the future",
-        )
-
-    if booking_in.end_at - booking_in.start_at > timedelta(hours=settings.max_booking_hours):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Bookings cannot be longer than {settings.max_booking_hours} hours",
         )
 
     # Two time ranges overlap when each one starts before the other one ends

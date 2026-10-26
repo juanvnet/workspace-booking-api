@@ -54,6 +54,32 @@ def test_create_booking_longer_than_8_hours_fails(client, user_headers, room, to
     assert response.status_code == 422
 
 
+def test_create_booking_shorter_than_5_minutes_fails(client, user_headers, room, tomorrow_9am):
+    data = booking_data(room, tomorrow_9am)
+    data["end_at"] = (tomorrow_9am + timedelta(minutes=4)).isoformat()
+
+    response = client.post(BOOKINGS_URL, json=data, headers=user_headers)
+
+    assert response.status_code == 422
+
+
+def test_create_booking_of_5_minutes_is_allowed(client, user_headers, room, tomorrow_9am):
+    data = booking_data(room, tomorrow_9am)
+    data["end_at"] = (tomorrow_9am + timedelta(minutes=5)).isoformat()
+
+    response = client.post(BOOKINGS_URL, json=data, headers=user_headers)
+
+    assert response.status_code == 201
+
+
+def test_create_booking_of_8_hours_is_allowed(client, user_headers, room, tomorrow_9am):
+    data = booking_data(room, tomorrow_9am, hours=8)
+
+    response = client.post(BOOKINGS_URL, json=data, headers=user_headers)
+
+    assert response.status_code == 201
+
+
 def test_create_booking_ending_before_start_fails(client, user_headers, room, tomorrow_9am):
     data = booking_data(room, tomorrow_9am, hours=-1)
 

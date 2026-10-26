@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    min_booking_minutes: int = 5
     max_booking_hours: int = 8
     cors_origins: list[str] = []
 
