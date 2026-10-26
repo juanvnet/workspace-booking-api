@@ -13,7 +13,10 @@ from app.config import settings
 from app.database import SessionDep, engine
 from app.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/token")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/users/token",
+    description="Log in with your email in the `username` field.",
+)
 
 
 def hash_password(password: str) -> str:

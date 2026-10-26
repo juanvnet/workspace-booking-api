@@ -10,6 +10,11 @@ LOGIN_URL = "/api/v1/users/token"
 ME_URL = "/api/v1/users/me"
 
 
+def login(client, email, password):
+    """Log in through the API. The OAuth2 standard calls the email field `username`"""
+    return client.post(LOGIN_URL, data={"username": email, "password": password})
+
+
 # ---------- Register ----------
 
 
@@ -43,14 +48,14 @@ def test_register_with_short_password_fails(client):
 
 
 def test_login(client, user):
-    response = client.post(LOGIN_URL, data={"username": user.email, "password": TEST_PASSWORD})
+    response = login(client, user.email, TEST_PASSWORD)
 
     assert response.status_code == 200
     assert "access_token" in response.json()
 
 
 def test_login_with_wrong_password_fails(client, user):
-    response = client.post(LOGIN_URL, data={"username": user.email, "password": "wrong-pass"})
+    response = login(client, user.email, "wrong-pass")
 
     assert response.status_code == 401
 
@@ -100,8 +105,8 @@ def test_update_name(client, user_headers):
 def test_update_password(client, user, user_headers):
     client.patch(ME_URL, json={"password": "new-password"}, headers=user_headers)
 
-    old_login = client.post(LOGIN_URL, data={"username": user.email, "password": TEST_PASSWORD})
-    new_login = client.post(LOGIN_URL, data={"username": user.email, "password": "new-password"})
+    old_login = login(client, user.email, TEST_PASSWORD)
+    new_login = login(client, user.email, "new-password")
 
     assert old_login.status_code == 401
     assert new_login.status_code == 200
