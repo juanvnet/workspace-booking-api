@@ -1,5 +1,5 @@
 # Image with Python already installed
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Do not create .pyc files and show the logs immediately
 ENV PYTHONDONTWRITEBYTECODE=1 \

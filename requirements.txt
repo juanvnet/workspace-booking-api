@@ -8,4 +8,4 @@ PyJWT==2.15.1
 python-multipart==0.0.32
 SQLAlchemy==2.1.5
 sqlmodel==0.0.48
-uvicorn[standard]==0.54.0
+uvicorn==0.54.0
