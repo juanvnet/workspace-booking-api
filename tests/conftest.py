@@ -2,33 +2,45 @@
 
 import os
 
-# Use an in-memory database and a test key instead of the values in .env
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import make_url
+
+
+class TestDatabase(BaseSettings):
+    """TEST_DATABASE_URL, read from the environment variables or the .env file"""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    test_database_url: str
+
+
+TEST_DATABASE_URL = TestDatabase().test_database_url
+# The tests delete all the tables, so they never run on a database that is not for tests
+if not make_url(TEST_DATABASE_URL).database.endswith("_test"):
+    raise RuntimeError("The name of the TEST_DATABASE_URL database must end with _test")
+
+# Use the test database and a test key instead of the values in .env
 # This must happen before importing the app, because the settings are read on import
-os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["SECRET_KEY"] = "test-secret-key-only-used-in-the-tests"
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
 
 from app.auth import create_access_token, hash_password
-from app.database import get_session
+from app.database import engine
 from app.main import app
 from app.models import Room, User
 
 TEST_PASSWORD = "test-password"
 
-# StaticPool keeps one single connection, so the in-memory database is shared
-# between the tests and the API (which runs in another thread).
-engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-
 
 @pytest.fixture
 def session():
     """An empty database for each test"""
+    SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
@@ -37,10 +49,8 @@ def session():
 
 @pytest.fixture
 def client(session):
-    """Calls the API using the test database instead of the real one"""
-    app.dependency_overrides[get_session] = lambda: session
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+    """Calls the API. Each request opens its own database session, like in production"""
+    return TestClient(app)
 
 
 @pytest.fixture

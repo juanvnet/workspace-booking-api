@@ -176,9 +176,12 @@ If the room is already booked at that time, the API answers `409`.
 
 ## Run the tests
 
-The tests use a temporary database in memory, so they do not need Docker.
+The tests use the `booking_test` database (`TEST_DATABASE_URL` in `.env`).
+Its tables are deleted and created again for each test.
 
 ```bash
+docker compose up -d db
+docker compose exec db createdb -U booking booking_test   # only the first time
 py -3.15 -m venv .venv             # macOS / Linux: python3.15 -m venv .venv
 .venv\Scripts\activate             # macOS / Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
