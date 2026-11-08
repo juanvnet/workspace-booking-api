@@ -57,20 +57,21 @@ To stop the API: `docker compose down`.
 
 ---
 
-## Run without Docker
+## Run the API without Docker
 
-You only need Python 3.15. The API uses a local SQLite file instead of PostgreSQL.
+You need Python 3.15 and PostgreSQL. The easiest way is to start only the database with Docker.
 
 ```bash
 git clone https://github.com/juanvnet/workspace-booking-api.git && cd workspace-booking-api
 cp .env.example .env               # Windows: copy .env.example .env
+docker compose up -d db
 py -3.15 -m venv .venv             # macOS / Linux: python3.15 -m venv .venv
 .venv\Scripts\activate             # macOS / Linux: source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Then open **http://localhost:8000/docs**. The `booking.db` file is created automatically.
+Then open **http://localhost:8000/docs**.
 
 ---
 
