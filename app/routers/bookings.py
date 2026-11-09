@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.auth import CurrentUser
@@ -14,6 +15,8 @@ from app.models import Booking, BookingCreate, BookingPublic, Room, User
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 logger = logging.getLogger(__name__)
+
+ROOM_ALREADY_BOOKED = "Room is already booked at that time"
 
 
 def send_confirmation(user_id: int, booking_id: int) -> None:
@@ -36,7 +39,9 @@ def create_booking(
     user: CurrentUser,
     background_tasks: BackgroundTasks,
 ) -> Booking:
-    room = session.get(Room, booking_in.room_id)
+    # Lock the room until the commit, so two bookings of the same room are made one after
+    # the other and the overlap check below always sees the latest bookings
+    room = session.get(Room, booking_in.room_id, with_for_update=True)
     if room is None or not room.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
 
@@ -56,13 +61,20 @@ def create_booking(
         )
     ).first()
     if overlapping is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Room is already booked at that time"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ROOM_ALREADY_BOOKED)
 
     booking = Booking.model_validate(booking_in, update={"user_id": user.id})
     session.add(booking)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as error:
+        # Last safety net: the booking_no_overlap constraint of PostgreSQL (see app/models.py)
+        session.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23P01":  # exclusion_violation
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=ROOM_ALREADY_BOOKED
+            ) from error
+        raise
     session.refresh(booking)
 
     background_tasks.add_task(send_confirmation, user.id, booking.id)

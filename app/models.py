@@ -10,6 +10,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Self
 
 from pydantic import EmailStr, field_validator, model_validator
+from sqlalchemy import DDL, event, text
+from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, SQLModel
 
 from app.config import settings
@@ -92,9 +94,29 @@ class BookingBase(SQLModel):
 
 
 class Booking(BookingBase, table=True):
+    # PostgreSQL itself rejects two confirmed bookings of the same room whose times overlap
+    # '[)' leaves the end time out, so back-to-back bookings (09:00-10:00, 10:00-11:00) are allowed
+    __table_args__ = (
+        ExcludeConstraint(
+            ("room_id", "="),
+            (text("tstzrange(start_at, end_at, '[)')"), "&&"),
+            name="booking_no_overlap",
+            using="gist",
+            where=text("status = 'confirmed'"),
+        ),
+    )
+
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     status: str = "confirmed"
+
+
+# btree_gist lets the constraint above mix "=" on room_id with "&&" (overlaps) on time ranges
+event.listen(
+    Booking.__table__,
+    "before_create",
+    DDL("CREATE EXTENSION IF NOT EXISTS btree_gist"),
+)
 
 
 class BookingCreate(BookingBase):

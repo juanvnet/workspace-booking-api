@@ -15,7 +15,7 @@ Built with **FastAPI**, **PostgreSQL** and **Docker**.
 - Register and log in with a **JWT token** (passwords are stored hashed with bcrypt).
 - **Users** book rooms and manage their own bookings.
 - **Admins** create, update and delete rooms.
-- A room cannot be booked twice at the same time.
+- A room cannot be booked twice at the same time, even if two people book it at the same moment.
 - Bookings must be in the future and last between 5 minutes and 8 hours.
 - Times are always stored and returned in **UTC**. All offices are assumed to be in the
   same timezone (Switzerland), so the client converts the times to Swiss local time.
@@ -172,6 +172,16 @@ curl -X POST http://localhost:8000/api/v1/bookings \
 The answer shows the times in UTC (`08:00:00Z`), because `+01:00` is the Swiss winter time.
 If the room is already booked at that time, the API answers `409`.
 
+### No double bookings, even at the same moment
+
+Two people can try to book the same room at the same moment. Two things make sure that
+only one of them gets it:
+
+1. The API **locks the room** while it checks and saves a booking, so the bookings of the same
+   room are saved one after another (bookings of different rooms do not wait for each other).
+2. PostgreSQL has a **constraint** (`booking_no_overlap` in `app/models.py`) that rejects two
+   confirmed bookings of the same room whose times overlap, whatever happens in the code.
+
 ---
 
 ## Run the tests
@@ -188,7 +198,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are **52 tests** for users, rooms and bookings.
+There are **59 tests** for users, rooms and bookings, including bookings made at the same moment.
 They also run automatically on GitHub after every push (GitHub Actions).
 
 ---

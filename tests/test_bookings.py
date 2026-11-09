@@ -1,8 +1,22 @@
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import false
+from sqlmodel import select
+
+import app.routers.bookings as bookings_router
+from app.models import Booking
 
 BOOKINGS_URL = "/api/v1/bookings"
+
+
+def at(day: datetime, hour: str) -> datetime:
+    """The same day as `day` at `hour` ("HH:MM")"""
+    hours, minutes = hour.split(":")
+    return day.replace(hour=int(hours), minute=int(minutes))
 
 
 def booking_data(room, start, hours=1) -> dict:
@@ -99,8 +113,21 @@ def test_create_booking_for_unknown_room_fails(client, user_headers, room, tomor
 # ---------- Overlaps (the `booking` fixture is from 09:00 to 10:00) ----------
 
 
-def test_overlapping_booking_fails(client, other_user_headers, booking, room, tomorrow_9am):
-    data = booking_data(room, tomorrow_9am + timedelta(minutes=30))  # 09:30-10:30
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        ("08:30", "09:30"),
+        ("09:30", "10:30"),
+        ("09:15", "09:45"),
+        ("08:00", "11:00"),
+        ("09:00", "10:00"),
+    ],
+)
+def test_overlapping_booking_fails(
+    client, other_user_headers, booking, room, tomorrow_9am, start, end
+):
+    data = booking_data(room, at(tomorrow_9am, start))
+    data["end_at"] = at(tomorrow_9am, end).isoformat()
 
     response = client.post(BOOKINGS_URL, json=data, headers=other_user_headers)
 
@@ -125,6 +152,75 @@ def test_cancelled_booking_frees_the_slot(
     )
 
     assert response.status_code == 201
+
+
+def test_database_rejects_overlap_missed_by_the_api(
+    client, other_user_headers, booking, room, tomorrow_9am, monkeypatch
+):
+    """Even if the overlap check of the API failed, the database constraint answers 409"""
+    real_select = bookings_router.select
+    monkeypatch.setattr(bookings_router, "select", lambda *a: real_select(*a).where(false()))
+    data = booking_data(room, tomorrow_9am + timedelta(minutes=30))  # 09:30-10:30
+
+    response = client.post(BOOKINGS_URL, json=data, headers=other_user_headers)
+
+    assert response.status_code == 409
+
+
+def test_simultaneous_bookings_of_the_same_slot(
+    client, session, user_headers, room, tomorrow_9am, monkeypatch
+):
+    """10 requests at the same time for the same slot: only one booking is saved"""
+    model_validate = Booking.model_validate
+
+    def slow_save(*args, **kwargs):
+        time.sleep(0.1)  # the moment where two requests at the same time could both pass the check
+        return model_validate(*args, **kwargs)
+
+    monkeypatch.setattr(Booking, "model_validate", slow_save)
+    data = booking_data(room, tomorrow_9am)
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        responses = list(
+            pool.map(
+                lambda _: client.post(BOOKINGS_URL, json=data, headers=user_headers), range(10)
+            )
+        )
+
+    assert sorted(response.status_code for response in responses) == [201] + [409] * 9
+    assert len(session.exec(select(Booking)).all()) == 1
+
+
+def test_second_booking_waits_until_the_first_one_is_saved(
+    client, user_headers, room, tomorrow_9am, monkeypatch
+):
+    """The room is locked while a booking is saved: a second request for the same room waits,
+    then sees the new booking and answers 409 without trying to save"""
+    saves = []
+    first_is_saving = threading.Event()
+    let_first_finish = threading.Event()
+    model_validate = Booking.model_validate
+
+    def hold_first_save(*args, **kwargs):
+        saves.append(1)
+        if len(saves) == 1:
+            first_is_saving.set()
+            let_first_finish.wait(timeout=5)
+        return model_validate(*args, **kwargs)
+
+    monkeypatch.setattr(Booking, "model_validate", hold_first_save)
+    data = booking_data(room, tomorrow_9am)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, BOOKINGS_URL, json=data, headers=user_headers)
+        assert first_is_saving.wait(timeout=5)
+        second = pool.submit(client.post, BOOKINGS_URL, json=data, headers=user_headers)
+        time.sleep(0.5)  # without the lock, the second request would reach the save by now
+        let_first_finish.set()
+
+    assert first.result().status_code == 201
+    assert second.result().status_code == 409
+    assert len(saves) == 1
 
 
 # ---------- List and read ----------
